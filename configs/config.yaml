@@ -1,0 +1,34 @@
+# Experiment configuration (all independent-variable settings, paths, thresholds)
+experiment:
+  name: itsm-ai-triage-research
+  is_sample: true          # true -> banner "SAMPLE DATA, pipeline check only"
+  random_seed: 42
+  timeout_sec: 60          # warn if the pipeline runs longer than this
+
+paths:
+  cases_csv: data/sample/cases.csv                    # one row = one coded case (DAP output)
+  coder_agreement_csv: data/sample/coder_agreement.csv
+  output_dir: results
+
+# Independent variables (IV1, IV2): admissible coded values
+independent_variables:
+  triage_type: {0: "Legacy rule-based / manual", 1: "ML / AI predictive classifier"}
+  autonomy_level: {1: "Advisory", 2: "Semi-autonomous (human override)", 3: "Full autonomous"}
+
+# Groups (baselines + experimental group)
+groups:
+  C1: "Legacy baseline"
+  C2: "Vanilla AI baseline"
+  E1: "Guardrailed hybrid AI"
+
+statistics:
+  alpha: 0.05
+  min_group_size: 3        # sample run; raise to >= 10 for the real data collection (Week 7)
+
+# Guardrail metrics (pre-registered thresholds)
+guardrails:
+  max_ai_bounce_rate_pct: 15.0       # mean R_bounce of AI groups must not exceed this
+  min_weighted_kappa: 0.70           # inter-coder agreement for DV1 (DAP coding)
+  min_third_party_share: 0.30        # share of cases from post-mortems / regulatory filings
+  third_party_sources: [postmortem, regulatory_filing]
+  forbid_full_autonomy_without_governance: true   # no case with autonomy=3 and Igov=0
