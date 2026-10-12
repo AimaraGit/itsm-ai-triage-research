@@ -1,0 +1,5 @@
+guardrail,value,threshold,passed
+G1_ai_bounce_rate_pct,9.53,<= 15.0,True
+G2_weighted_kappa_dv1,0.949,>= 0.7,True
+G3_third_party_share,0.58,>= 0.3,True
+G4_full_autonomy_without_governance,0.0,== 0,True

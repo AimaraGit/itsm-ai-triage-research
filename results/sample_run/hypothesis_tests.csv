@@ -1,0 +1,5 @@
+hypothesis,variable,test,n,statistic,p_value,alpha,decision
+H1.1,DV1 hitl_score,Mann-Whitney U (ML > legacy),8/4,30.0,0.0091,0.05,REJECT_H0
+H1.2 (primary),DV2 dT_handoff_pct,Wilcoxon signed-rank (T_legacy > T_AI),8,36.0,0.0039,0.05,REJECT_H0
+H1.2 (secondary),DV3 r_bounce_pct,Mann-Whitney U (legacy > AI),4/8,30.0,0.0081,0.05,REJECT_H0
+H1.3,IV2 autonomy_level vs DV4 i_gov,Spearman rho (positive),12,0.2335,0.2326,0.05,FAIL_TO_REJECT_H0

@@ -1,0 +1,20 @@
+2026-10-12 11:26:04,286 | WARNING | SAMPLE DATA - pipeline check only, results are NOT evidence.
+2026-10-12 11:26:04,292 | INFO | Loaded 12 coded cases
+2026-10-12 11:26:04,314 | INFO | Group summary:
+group  n_cases  hitl_score_mean  dT_handoff_pct_mean  r_bounce_pct_mean  i_gov_mean
+   C1        4             1.50                  NaN              16.05        1.25
+   C2        4             2.50                32.31              13.20        1.75
+   E1        4             4.25                52.86               5.87        2.75
+2026-10-12 11:26:04,317 | INFO | Hypothesis tests:
+      hypothesis                        variable                                   test   n  statistic  p_value  alpha          decision
+            H1.1                  DV1 hitl_score           Mann-Whitney U (ML > legacy) 8/4    30.0000   0.0091   0.05         REJECT_H0
+  H1.2 (primary)              DV2 dT_handoff_pct Wilcoxon signed-rank (T_legacy > T_AI)   8    36.0000   0.0039   0.05         REJECT_H0
+H1.2 (secondary)                DV3 r_bounce_pct           Mann-Whitney U (legacy > AI) 4/8    30.0000   0.0081   0.05         REJECT_H0
+            H1.3 IV2 autonomy_level vs DV4 i_gov                Spearman rho (positive)  12     0.2335   0.2326   0.05 FAIL_TO_REJECT_H0
+2026-10-12 11:26:04,319 | INFO | Guardrails:
+                          guardrail  value threshold  passed
+              G1_ai_bounce_rate_pct  9.530   <= 15.0    True
+              G2_weighted_kappa_dv1  0.949    >= 0.7    True
+               G3_third_party_share  0.580    >= 0.3    True
+G4_full_autonomy_without_governance  0.000      == 0    True
+2026-10-12 11:26:04,320 | INFO | Done in 0.04 s -> /app/results
