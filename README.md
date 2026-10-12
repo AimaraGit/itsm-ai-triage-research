@@ -78,7 +78,7 @@ pip install -r requirements.txt && python -m src.benchmark --config configs/conf
 ```bibtex
 @misc{temresheva2026itsm,
   title  = {AI-Enabled Incident Triage and IT Service Management (ITSM)},
-  author = {Temresheva, Aimara and Dolgopolov, Kirill},
+  author = {Temresheva Aimara and Dolgopolov Kirill},
   year   = {2026},
   howpublished = {\url{https://github.com/AimaraGit/itsm-ai-triage-research}}
 }
