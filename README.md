@@ -45,6 +45,20 @@ docker build -t itsm-bench .          # also runs the unit tests
 docker run --rm -v "$(pwd)/results:/app/results" itsm-bench
 ```
 Results appear in `results/`: `metrics.csv`, `hypothesis_tests.csv`, `guardrails.csv`, `run.log`.
+> **GitHub Codespaces / remote Docker:** if `results/` stays empty (bind mounts are not available), copy the outputs out of the container instead:
+> ```bash
+> docker run --name bench itsm-bench
+> docker cp bench:/app/results/. ./results/ && docker rm bench
+> ```
+
+### Example output (sample data, not evidence)
+```text
+H1.1            DV1 hitl_score             Mann-Whitney U (ML > legacy)   p=0.0091  REJECT_H0
+H1.2 (primary)  DV2 dT_handoff_pct         Wilcoxon signed-rank           p=0.0039  REJECT_H0
+H1.2 (secondary) DV3 r_bounce_pct          Mann-Whitney U (legacy > AI)   p=0.0081  REJECT_H0
+H1.3            IV2 autonomy vs DV4 i_gov  Spearman rho (positive)        p=0.2326  FAIL_TO_REJECT_H0
+Guardrails G1-G4: all passed
+```
 
 Without Docker:
 ```bash
@@ -66,7 +80,7 @@ pip install -r requirements.txt && python -m src.benchmark --config configs/conf
   title  = {AI-Enabled Incident Triage and IT Service Management (ITSM)},
   author = {Temresheva, Aimara and Dolgopolov, Kirill},
   year   = {2026},
-  howpublished = {\url{https://github.com/MagicTMT/itsm-ai-triage-research}}
+  howpublished = {\url{https://github.com/AimaraGit/itsm-ai-triage-research}}
 }
 ```
 Released under the MIT License (see `LICENSE`).
