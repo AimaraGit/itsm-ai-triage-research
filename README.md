@@ -40,7 +40,7 @@ Mixed-methods (qualitative-driven) study. Public engineering disclosures, post-m
 
 ## Quickstart (3 commands)
 ```bash
-git clone https://github.com/MagicTMT/itsm-ai-triage-research.git && cd itsm-ai-triage-research
+git clone https://github.com/AimaraGit/itsm-ai-triage-research.git && cd itsm-ai-triage-research
 docker build -t itsm-bench .          # also runs the unit tests
 docker run --rm -v "$(pwd)/results:/app/results" itsm-bench
 ```
