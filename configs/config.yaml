@@ -32,3 +32,10 @@ guardrails:
   min_third_party_share: 0.30        # share of cases from post-mortems / regulatory filings
   third_party_sources: [postmortem, regulatory_filing]
   forbid_full_autonomy_without_governance: true   # no case with autonomy=3 and Igov=0
+
+paths:
+  output_dir: "data/raw/benchmark_results"
+
+benchmark:
+  warmup_runs: 15
+  test_runs: 100
