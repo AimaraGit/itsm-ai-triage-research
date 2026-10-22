@@ -6,9 +6,9 @@ from typing import List
 def handoff_delta(val1: float, val2: float) -> float:
     if math.isnan(val1) or math.isnan(val2):
         return float("nan")
-    if val2 == 0:
-        raise ValueError("val2 cannot be zero")
-    return ((val1 - val2) / val2) * 100
+    if val1 == 0:
+        raise ValueError("val1 cannot be zero")
+    return ((val1 - val2) / val1) * 100
 
 
 def bounce_rate(bounces: int, total_visits: int) -> float:
