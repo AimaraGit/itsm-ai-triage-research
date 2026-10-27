@@ -6,7 +6,7 @@ experiment:
   timeout_sec: 60          # warn if the pipeline runs longer than this
 
 paths:
-  cases_csv: data/sample/cases.csv                    # one row = one coded case (DAP output)
+  cases_csv: data/sample/cases.csv
   coder_agreement_csv: data/sample/coder_agreement.csv
   output_dir: results
 
@@ -33,8 +33,6 @@ guardrails:
   third_party_sources: [postmortem, regulatory_filing]
   forbid_full_autonomy_without_governance: true   # no case with autonomy=3 and Igov=0
 
-paths:
-  output_dir: "data/raw/benchmark_results"
 
 benchmark:
   warmup_runs: 15
