@@ -37,3 +37,12 @@ guardrails:
 benchmark:
   warmup_runs: 15
   test_runs: 100
+  disable_gc: true                       # gc.collect() before, gc off during each timed call
+  output_jsonl: data/raw/test_run.jsonl  # line 1 = metadata, then one line per run
+  workload:
+    n_inputs: 50                # distinct synthetic inputs, cycled over the runs
+    pareto_alpha: 1.5           # tail index of input size (smaller = heavier tail)
+    base_rows: 12               # scale of input size (rows of cases)
+    max_rows: 2000              # cap on rows per input
+    edge_case_fraction: 0.10    # share of inputs that are edge cases (incl. invalid ones)
+    long_string_len: 100000     # length of the "gigantic string" edge case
