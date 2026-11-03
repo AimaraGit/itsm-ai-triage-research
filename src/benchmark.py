@@ -6,12 +6,17 @@ Reads coded cases (output of the Document Analysis Protocol), computes DV1-DV4,
 tests H1.1 / H1.2 / H1.3, evaluates guardrails G1-G4 and writes into
 paths.output_dir:
     metrics.csv, hypothesis_tests.csv, guardrails.csv, run.log,
-    benchmark_runs.jsonl, benchmark_summary.json
+    benchmark_summary.json, and (path from benchmark.output_jsonl)
+    data/raw/test_run.jsonl
 """
 import argparse
+import gc
+import hashlib
+import importlib.metadata
 import json
 import platform
 import random
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -41,73 +46,227 @@ REQUIRED_COLUMNS = [
 # --------------------------------------------------------------------------
 # Environment and timing
 # --------------------------------------------------------------------------
-def get_system_metadata() -> Dict[str, Any]:
-    """Records the environment parameters of the run."""
-    return {
+def _cpu_model() -> str:
+    """CPU model name (platform.processor() returns only the arch on Linux)."""
+    try:
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+            if line.lower().startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or platform.machine()
+
+
+def _cgroup_limits() -> Dict[str, Any]:
+    """Docker/cgroup CPU and memory limits (None if unlimited or unavailable)."""
+    out: Dict[str, Any] = {"cgroup_cpu_limit": None, "cgroup_memory_limit_bytes": None}
+    try:  # cgroup v2
+        cpu = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if cpu[0] != "max":
+            out["cgroup_cpu_limit"] = round(int(cpu[0]) / int(cpu[1]), 2)
+        mem = Path("/sys/fs/cgroup/memory.max").read_text().strip()
+        if mem != "max":
+            out["cgroup_memory_limit_bytes"] = int(mem)
+    except (OSError, ValueError, IndexError):
+        pass
+    return out
+
+
+def _git_commit() -> Optional[str]:
+    try:
+        res = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                             text=True, timeout=5)
+        return res.stdout.strip() or None if res.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def get_system_metadata(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Records the environment parameters of the run (written ONCE per JSONL file)."""
+    meta: Dict[str, Any] = {
         "python_version": sys.version.split()[0],
         "os": platform.platform(),
-        "cpu": platform.processor() or platform.machine(),
+        "cpu": _cpu_model(),
         "cpu_count_logical": psutil.cpu_count(logical=True),
         "cpu_count_physical": psutil.cpu_count(logical=False),
         "ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
+        "git_commit": _git_commit(),
+        "in_docker": Path("/.dockerenv").exists(),
+        "packages": {p: importlib.metadata.version(p)
+                     for p in ("numpy", "pandas", "scipy", "PyYAML", "psutil")},
     }
- 
- 
+    meta.update(_cgroup_limits())
+    if cfg is not None:
+        meta["seed"] = int(cfg["experiment"]["random_seed"])
+        meta["config_sha256"] = hashlib.sha256(
+            json.dumps(cfg, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    return meta
+
+
+# --------------------------------------------------------------------------
+# Synthetic workload (heavy-tailed sizes + edge cases)
+# --------------------------------------------------------------------------
+def build_workload(cases: pd.DataFrame, n_inputs: int, wl_cfg: Dict[str, Any],
+                   seed: int) -> List[Dict[str, Any]]:
+    """Deterministic list of inputs for analyze().
+
+    Input size (rows) follows a Pareto distribution (many small inputs, a few huge
+    ones) instead of random.randint(); rows are resampled from the real cases with
+    unique ids. A fixed share of runs uses edge cases: empty frame, single row,
+    all-NaN handoff times, extreme strings in text columns, and invalid rows that
+    must raise (n_total = 0), which exercises the error path on purpose.
+    """
+    rng = np.random.default_rng(seed)
+    alpha = float(wl_cfg.get("pareto_alpha", 1.5))
+    base = int(wl_cfg.get("base_rows", 12))
+    max_rows = int(wl_cfg.get("max_rows", 2000))
+    edge_frac = float(wl_cfg.get("edge_case_fraction", 0.10))
+    long_len = int(wl_cfg.get("long_string_len", 100_000))
+
+    def resample(n: int) -> pd.DataFrame:
+        df = cases.sample(n=n, replace=True, random_state=int(rng.integers(1 << 31)))
+        df = df.reset_index(drop=True).copy()
+        df["case_id"] = [f"W{i:05d}" for i in range(len(df))]
+        return df
+
+    edge_makers = {
+        "empty": lambda: cases.iloc[0:0].copy(),
+        "single_row": lambda: resample(1),
+        "nan_times": lambda: resample(base).assign(t_ai_min=float("nan"),
+                                                   t_legacy_min=float("nan")),
+        "long_string": lambda: resample(base).assign(source_type="x" * long_len),
+        "unicode_string": lambda: resample(base).assign(source_type="пост-мортем ✓\u0000\u202e"),
+        "invalid_zero_total": lambda: resample(base).assign(n_total=0, n_misrouted=0),
+    }
+    edge_names = list(edge_makers)
+
+    # Edge-case slots are chosen without replacement and kinds cycle, so every kind
+    # (including the invalid one that must raise) appears whenever n_inputs allows.
+    n_edge = min(n_inputs, max(len(edge_names), round(n_inputs * edge_frac)))
+    edge_slots = {int(i): edge_names[k % len(edge_names)] for k, i in
+                  enumerate(rng.choice(n_inputs, size=n_edge, replace=False))}
+
+    workload: List[Dict[str, Any]] = []
+    for idx in range(n_inputs):
+        if idx in edge_slots:
+            kind = edge_slots[idx]
+            df = edge_makers[kind]()
+        else:
+            n = int(min(max_rows, max(1, round(base * (1 + rng.pareto(alpha))))))
+            kind, df = "pareto", resample(n)
+        workload.append({"kind": kind, "n_rows": len(df), "cases": df})
+    return workload
+
+
+# --------------------------------------------------------------------------
+# Isolated benchmark loop
+# --------------------------------------------------------------------------
+def _run_once(target_fn: Callable[..., Any], args: Tuple[Any, ...],
+              kwargs: Dict[str, Any], phase: str, iteration: int,
+              disable_gc: bool) -> Dict[str, Any]:
+    """One measurement. Only the call itself sits between the two clock reads."""
+    gc.collect()                       # outside the timed region
+    if disable_gc:
+        gc.disable()
+    status, error_type, error_msg = "success", None, None
+    c0 = time.process_time_ns()
+    t0 = time.perf_counter_ns()
+    try:
+        target_fn(*args, **kwargs)
+    except Exception as e:             # noqa: BLE001 - errors are data, not noise
+        status, error_type, error_msg = "error", type(e).__name__, str(e)
+    t1 = time.perf_counter_ns()
+    c1 = time.process_time_ns()
+    if disable_gc:
+        gc.enable()
+    return {
+        "record_type": "run",
+        "phase": phase,                # "warmup" | "work"
+        "iteration": iteration,
+        "latency_ms": (t1 - t0) / 1e6,
+        "cpu_ms": (c1 - c0) / 1e6,     # cpu_ms << latency_ms => waiting/noise, not compute
+        "status": status,
+        "error_type": error_type,
+        "error": error_msg,
+        "ts_unix_us": time.time_ns() // 1000,   # wall clock, microseconds
+        "perf_ns": t1,
+    }
+
+
+def _stats(values_ms: np.ndarray) -> Dict[str, float]:
+    return {
+        "n": int(len(values_ms)),
+        "min_ms": float(values_ms.min()),
+        "p50_ms": float(np.percentile(values_ms, 50)),
+        "p95_ms": float(np.percentile(values_ms, 95)),
+        "p99_ms": float(np.percentile(values_ms, 99)),
+        "max_ms": float(values_ms.max()),
+        "mean_ms": float(values_ms.mean()),
+        "std_ms": float(values_ms.std()),
+    }
+
+
+def summarize_runs(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Aggregates WORK-phase runs only. Errors are counted, never silently dropped."""
+    work = [r for r in records if r["phase"] == "work"]
+    ok = np.array([r["latency_ms"] for r in work if r["status"] == "success"])
+    bad = np.array([r["latency_ms"] for r in work if r["status"] == "error"])
+    summary: Dict[str, Any] = {
+        "n_work_runs": len(work),
+        "n_warmup_runs": sum(r["phase"] == "warmup" for r in records),
+        "n_errors": int(len(bad)),
+        "error_rate_pct": float(len(bad) / len(work) * 100) if work else float("nan"),
+        "errors_by_type": {},
+        "note": "p99 on <1000 successful runs is indicative only.",
+    }
+    for r in work:
+        if r["status"] == "error":
+            summary["errors_by_type"][r["error_type"]] = \
+                summary["errors_by_type"].get(r["error_type"], 0) + 1
+    if len(ok):
+        summary["success"] = _stats(ok)
+        cpu = np.array([r["cpu_ms"] for r in work if r["status"] == "success"])
+        summary["success"]["cpu_to_wall_ratio_median"] = float(np.median(cpu / ok))
+    if len(bad):
+        summary["failed_latency"] = _stats(bad)   # failures kept visible, reported apart
+    return summary
+
+
 def execute_isolated_benchmark(
     target_fn: Callable[..., Any],
-    fn_args: Tuple[Any, ...],
-    fn_kwargs: Dict[str, Any],
+    workload: List[Dict[str, Any]],
+    make_args: Callable[[Dict[str, Any]], Tuple[Tuple[Any, ...], Dict[str, Any]]],
     warmup_runs: int = 15,
     test_runs: int = 100,
-) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
-    """Warm-up phase, then an isolated timing loop (no file I/O inside the loop)."""
-    for _ in range(warmup_runs):
-        try:
-            target_fn(*fn_args, **fn_kwargs)
-        except Exception:
-            pass
- 
+    disable_gc: bool = True,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Warm-up phase, then an isolated timing loop (no file I/O inside the loop).
+
+    Warm-up runs are recorded with phase="warmup" (errors included) and excluded
+    from the summary. Run i uses workload[i % len(workload)].
+    """
+    if not workload:
+        raise ValueError("workload must not be empty")
     records: List[Dict[str, Any]] = []
-    latencies_ns: List[float] = []
- 
-    for i in range(test_runs):
-        status = "success"
-        error_msg: Optional[str] = None
- 
-        t0 = time.perf_counter_ns()
-        try:
-            _ = target_fn(*fn_args, **fn_kwargs)
-        except Exception as e:
-            status = "error"
-            error_msg = str(e)
-        t1 = time.perf_counter_ns()
- 
-        if status == "success":
-            latencies_ns.append(t1 - t0)
- 
-        records.append({
-            "iteration": i,
-            "latency_ms": (t1 - t0) / 1e6,
-            "status": status,
-            "error": error_msg,
-            "timestamp_ns": t1,
-        })
- 
-    if not latencies_ns:
-        aggregated_metrics = {"error_rate_pct": 100.0}
-    else:
-        latencies_ms = np.array(latencies_ns) / 1e6
-        aggregated_metrics = {
-            "p50_ms": float(np.percentile(latencies_ms, 50)),
-            "p95_ms": float(np.percentile(latencies_ms, 95)),
-            "p99_ms": float(np.percentile(latencies_ms, 99)),
-            "mean_ms": float(np.mean(latencies_ms)),
-            "std_ms": float(np.std(latencies_ms)),
-            "error_rate_pct": float(((test_runs - len(latencies_ms)) / test_runs) * 100),
-        }
-    return records, aggregated_metrics
- 
- 
+    for phase, count, offset in (("warmup", warmup_runs, 0), ("work", test_runs, warmup_runs)):
+        for i in range(count):
+            item = workload[(offset + i) % len(workload)]
+            args, kwargs = make_args(item)
+            rec = _run_once(target_fn, args, kwargs, phase, i, disable_gc)
+            rec["workload_kind"], rec["n_rows"] = item["kind"], item["n_rows"]
+            records.append(rec)
+    return records, summarize_runs(records)
+
+
+def write_jsonl(path: Path, meta: Dict[str, Any], records: List[Dict[str, Any]]) -> None:
+    """All file I/O happens here, after measurement. Line 1 = metadata header."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"record_type": "meta", **meta}, ensure_ascii=False) + "\n")
+        for rec in records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
 # --------------------------------------------------------------------------
 # Data loading and derived variables
 # --------------------------------------------------------------------------
@@ -345,7 +504,7 @@ def run_pipeline(config_path: Path) -> Dict[str, Any]:
     if is_sample:
         lines.append("*** SAMPLE DATA, pipeline check only. Results are NOT research findings. ***")
     lines.append(f"experiment={cfg['experiment']['name']} seed={seed} cases={len(cases)}")
-    lines.append(f"environment={json.dumps(get_system_metadata())}")
+    lines.append(f"environment={json.dumps(get_system_metadata(cfg))}")
     for g in result["guardrails"]:
         lines.append(f"{g['id']} {'PASS' if g['passed'] else 'FAIL'}: {g['guardrail']} "
                      f"= {g['value']:.4g} (required {g['rule']} {g['threshold']})")
@@ -391,20 +550,30 @@ def main(args: Optional[List[str]] = None) -> int:
         agr_path = Path(cfg["paths"]["coder_agreement_csv"])
         agreement = pd.read_csv(agr_path) if agr_path.exists() else None
         cases = load_cases(Path(cfg["paths"]["cases_csv"]))
+        seed = int(cfg["experiment"]["random_seed"])
+        warmup = int(bench_cfg.get("warmup_runs", 15))
+        runs = int(bench_cfg.get("test_runs", 100))
+        workload = build_workload(cases, int(bench_cfg.get("workload", {}).get("n_inputs", 50)),
+                                  bench_cfg.get("workload", {}), seed)
         records, agg = execute_isolated_benchmark(
             target_fn=analyze,
-            fn_args=(cfg, cases, agreement),
-            fn_kwargs={},
-            warmup_runs=int(bench_cfg.get("warmup_runs", 15)),
-            test_runs=int(bench_cfg.get("test_runs", 100)),
+            workload=workload,
+            make_args=lambda item: ((cfg, item["cases"], agreement), {}),
+            warmup_runs=warmup,
+            test_runs=runs,
+            disable_gc=bool(bench_cfg.get("disable_gc", True)),
         )
-        metadata = get_system_metadata()
-        with open(output_dir / "benchmark_runs.jsonl", "w", encoding="utf-8") as f:
-            for rec in records:
-                rec["metadata"] = metadata
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        (output_dir / "benchmark_summary.json").write_text(json.dumps(agg, indent=2), encoding="utf-8")
- 
+        metadata = get_system_metadata(cfg)
+        metadata.update({"warmup_runs": warmup, "test_runs": runs,
+                         "workload": bench_cfg.get("workload", {}),
+                         "disable_gc": bool(bench_cfg.get("disable_gc", True))})
+        jsonl_path = Path(bench_cfg.get("output_jsonl", output_dir / "benchmark_runs.jsonl"))
+        write_jsonl(jsonl_path, metadata, records)
+        (output_dir / "benchmark_summary.json").write_text(
+            json.dumps(agg, indent=2), encoding="utf-8")
+        print(f"benchmark: {agg['n_work_runs']} work runs (+{agg['n_warmup_runs']} warm-up), "
+              f"errors={agg['n_errors']} -> {jsonl_path}")
+
     if parsed.strict and result["failed_guardrails"]:
         return 2
     return 0
