@@ -16,7 +16,9 @@ results/*
 !results/.gitkeep
 
 # Raw data, model weights and binaries
-data/raw/
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/test_run.jsonl
 data/processed/
 *.pt
 *.pth
