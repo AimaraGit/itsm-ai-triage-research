@@ -13,6 +13,9 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+# Ensure results directory exists
+RUN mkdir -p /app/results
+
 # Fail the build if the unit tests do not pass
 RUN python -m unittest discover -s tests
 
