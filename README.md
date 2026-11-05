@@ -49,11 +49,13 @@ Vector exports: [Figure 1 PDF](reports/figures/fig1_latency_vs_load.pdf) · [Fig
 
 The timing experiment measures the local Python data-analysis function, not a deployed ITSM system. It has no controlled request-rate schedule, concurrency, network latency, or second runtime implementation. Consequently it cannot substantiate a baseline-versus-proposed **latency** claim; the C1/E1 table above is a synthetic research-metric example only. A production comparison requires representative de-identified data, controlled load, a measured baseline implementation, and a predeclared experimental protocol.
 
-The domain artifact for the Software Engineering track (C4 model, metric collection points, and notation) is in [`docs/domain_model.md`](docs/domain_model.md).
+### Domain model (ML/AI track)
+
+The formal domain artifact for the ML/AI track (loss function, target metrics, guardrail definitions, and a notation table, in LaTeX) is in [`docs/domain_model.md`](docs/domain_model.md).
 
 ## Reproducible pipeline
 
-Use Python 3.11 or 3.12 with the pinned dependencies, then run from the repository root:
+Use Python 3.11 or 3.12 with the pinned dependencies (Python 3.13+ is not supported by the pinned numpy 1.26.4), then run from the repository root:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -68,6 +70,7 @@ The command runs the configured benchmark, writes `data/raw/test_run.jsonl`, exc
 - `reports/figures/fig2_distribution_boxplot.pdf` and `.png` (300 DPI)
 
 To reprocess the existing raw log without measuring again:
+> Re-running without `--skip-benchmark` measures latency again and overwrites `data/raw/test_run.jsonl`; absolute latency values depend on the machine, so the numbers in this README correspond to the committed log.
 
 ```bash
 python run_pipeline.py --config configs/config.yaml --skip-benchmark
@@ -81,11 +84,25 @@ The Docker image runs the same pipeline:
 docker build -t itsm-bench .
 docker run --rm -v "$(pwd)/data:/app/data" -v "$(pwd)/reports:/app/reports" -v "$(pwd)/results:/app/results" itsm-bench
 ```
+In GitHub Codespaces or other remote Docker environments, bind mounts may not work. Copy the outputs out of the container instead:
+
+```bash
+docker build -t itsm-bench .
+docker run --name bench itsm-bench
+docker cp bench:/app/data/. ./data/ && docker cp bench:/app/reports/. ./reports/ && docker rm bench
+```
 
 ## Repository structure
 
 ```text
 .
+├── README.md
+├── LICENSE
+├── Dockerfile
+├── requirements.txt                    # exact version pins
+├── run_pipeline.py                     # entry point: benchmark -> processing -> figures
+├── .gitignore                          # excludes checkpoints, caches, virtual environments
+├── .dockerignore
 ├── configs/config.yaml
 ├── data/
 │   ├── raw/test_run.jsonl
@@ -94,9 +111,11 @@ docker run --rm -v "$(pwd)/data:/app/data" -v "$(pwd)/reports:/app/reports" -v "
 ├── docs/
 │   ├── codebook.md
 │   ├── methodology_card.md
-│   └── domain_model.md                 # C4 model and metric definitions
+│   └── domain_model.md                 # ML/AI track: loss, metrics, notation (LaTeX)
 ├── notebooks/01_data_analysis.ipynb
-├── reports/figures/                    # PDF and 300-DPI PNG exports
+├── reports/
+│   ├── paper_section_4.md              # LMS-ready results section
+│   └── figures/                        # PDF and 300-DPI PNG exports
 ├── src/
 │   ├── benchmark.py                    # data-analysis benchmark and Task 2 pipeline
 │   ├── metrics.py                      # research outcome formulas
