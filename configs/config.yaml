@@ -9,6 +9,8 @@ paths:
   cases_csv: data/sample/cases.csv
   coder_agreement_csv: data/sample/coder_agreement.csv
   output_dir: results
+  processed_dir: data/processed
+  figures_dir: reports/figures
 
 # Independent variables (IV1, IV2): admissible coded values
 independent_variables:
@@ -38,6 +40,8 @@ benchmark:
   warmup_runs: 15
   test_runs: 100
   disable_gc: true                       # gc.collect() before, gc off during each timed call
+  max_unexpected_error_rate_pct: 0.0     # expected invalid-input edge cases are reported separately
+  bootstrap_samples: 2000
   output_jsonl: data/raw/test_run.jsonl  # line 1 = metadata, then one line per run
   workload:
     n_inputs: 50                # distinct synthetic inputs, cycled over the runs
