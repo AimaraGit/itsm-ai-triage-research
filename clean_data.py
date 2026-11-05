@@ -1,44 +1,22 @@
-import json
 from pathlib import Path
+from typing import Dict, Tuple
+
 import pandas as pd
 
-def parse_and_clean_logs(file_path: str | Path) -> tuple[dict, pd.DataFrame]:
-    """Parses raw JSONL logs, filters out warmup runs, and validates clean data."""
-    path = Path(file_path)
-    metadata = {}
-    records = []
+from src.process_data import load_benchmark_data
 
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            entry = json.loads(line)
-            if entry.get("record_type") == "meta":
-                metadata = entry
-            else:
-                records.append(entry)
 
-    df = pd.DataFrame(records)
-    
-    print(f"--- Phase 1 Output ---")
-    print(f"Total raw records loaded: {len(df)}")
-    
-    # --- Phase 2: Warmup Isolation & Filtering ---
-    # 1. Filter out warmup records (keep only 'eval' phase)
-    eval_df = df[df["phase"] == "eval"].copy()
-    
-    # 2. Filter out error runs if present
-    if "error_type" in eval_df.columns:
-        eval_df = eval_df[eval_df["error_type"].isna() | (eval_df["error_type"] == "None")]
-        
-    print(f"\n--- Phase 2 Output ---")
-    print(f"Filtered eval-only records: {len(eval_df)}")
-    print(f"Evaluated workload kinds: {eval_df['kind'].unique().tolist()}")
-    
-    return metadata, eval_df
+def parse_and_clean_logs(file_path: str | Path) -> Tuple[Dict, pd.DataFrame]:
+    """Load evaluation records, excluding warm-up while retaining failed runs."""
+    metadata, evaluation = load_benchmark_data(Path(file_path))
+    print(f"Raw runs loaded: {metadata['n_raw_runs']}")
+    print(f"Warm-up runs excluded: {metadata['n_warmup_runs']}")
+    print(f"Evaluation runs retained: {metadata['n_evaluation_runs']}")
+    print(f"Evaluation errors retained: {int(evaluation['status'].eq('error').sum())}")
+    return metadata, evaluation
+
 
 if __name__ == "__main__":
-    meta, clean_df = parse_and_clean_logs("data/raw/test_run.jsonl")
-    print("\nClean DataFrame preview:")
-    print(clean_df[["phase", "kind", "n_rows", "latency_ms"]])
+    _, clean_df = parse_and_clean_logs("data/raw/test_run.jsonl")
+    print(clean_df.head().to_string(index=False))
+
