@@ -216,9 +216,20 @@ def summarize_runs(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         "n_warmup_runs": sum(r["phase"] == "warmup" for r in records),
         "n_errors": int(len(bad)),
         "error_rate_pct": float(len(bad) / len(work) * 100) if work else float("nan"),
+        "n_expected_errors": sum(
+            r["phase"] == "work" and r.get("status") == "error" and r.get("expected_error", False)
+            for r in records
+        ),
+        "n_unexpected_errors": sum(
+            r["phase"] == "work" and r.get("status") == "error" and not r.get("expected_error", False)
+            for r in records
+        ),
         "errors_by_type": {},
         "note": "p99 on <1000 successful runs is indicative only.",
     }
+    summary["unexpected_error_rate_pct"] = (
+        float(summary["n_unexpected_errors"] / len(work) * 100) if work else float("nan")
+    )
     for r in work:
         if r["status"] == "error":
             summary["errors_by_type"][r["error_type"]] = \
@@ -254,6 +265,7 @@ def execute_isolated_benchmark(
             args, kwargs = make_args(item)
             rec = _run_once(target_fn, args, kwargs, phase, i, disable_gc)
             rec["workload_kind"], rec["n_rows"] = item["kind"], item["n_rows"]
+            rec["expected_error"] = item["kind"] == "invalid_zero_total"
             records.append(rec)
     return records, summarize_runs(records)
 
