@@ -19,4 +19,4 @@ RUN mkdir -p /app/results
 # Fail the build if the unit tests do not pass
 RUN python -m unittest discover -s tests
 
-CMD ["python", "-m", "src.benchmark", "--config", "configs/config.yaml"]
+CMD ["python", "run_pipeline.py", "--config", "configs/config.yaml"]
