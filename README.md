@@ -33,7 +33,7 @@ These illustrative differences are not evidence: the sample is synthetic, has on
 
 ### Local analysis-pipeline profile (synthetic inputs)
 
-The checked-in JSONL profiles one synchronous `analyze()` call over 100 evaluation runs on synthetic workloads. The current example has 98 successful runs and 2 expected invalid-input failures (2% total evaluation error rate; 0% unexpected errors). Successful-run latency is 7.32 ms median (p25–p75: 6.10–10.42 ms), p95 34.59 ms, and p99 36.43 ms. These are local code-profile values, not ITSM service performance; p99 is indicative with this sample size. Environment details and every run are in [`data/raw/test_run.jsonl`](data/raw/test_run.jsonl), and the aggregate table is [`data/processed/metrics_summary.csv`](data/processed/metrics_summary.csv).
+The checked-in JSONL profiles one synchronous `analyze()` call over 100 evaluation runs on synthetic workloads. The current example has 98 successful runs and 2 expected invalid-input failures (2% total evaluation error rate; 0% unexpected errors). Successful-run latency is 7.95 ms median (p25–p75: 7.79–8.22 ms), p95 12.69 ms, and p99 15.57 ms. These are local code-profile values, not ITSM service performance; p99 is indicative with this sample size. Environment details and every run are in [`data/raw/test_run.jsonl`](data/raw/test_run.jsonl), and the aggregate table is [`data/processed/metrics_summary.csv`](data/processed/metrics_summary.csv).
 
 ![Latency percentiles versus input size](reports/figures/fig1_latency_vs_load.png)
 
