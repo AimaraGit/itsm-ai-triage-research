@@ -1,0 +1,2 @@
+guardrail,value,expected_errors_excluded_from_guardrail,total_evaluation_runs,unexpected_errors,threshold_pct,passed,note
+Unexpected evaluation error rate (%),0,2,100,0,0,True,Expected invalid_zero_total edge-case errors remain counted in error_rate_pct.
