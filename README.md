@@ -1,7 +1,7 @@
 # AI-Enabled Incident Triage and IT Service Management (ITSM)
 
 **Authors:** Aimara Temresheva, Kirill Dolgopolov  
-**Course:** Research Methods (SCOM3001), Tasks 2–3  
+**Course:** Research Methods (SCOM3001), Tasks 2–4  
 **License:** MIT
 
 ## Research question
@@ -12,15 +12,15 @@ How are AI-enabled incident triage mechanisms integrated into ITSM workflows (RQ
 
 This mixed-methods (qualitative-driven) study codes public engineering disclosures, post-mortems, and regulatory documents using the Document Analysis Protocol in [`docs/codebook.md`](docs/codebook.md). The research pipeline computes HITL, handoff-time, misrouting, and governance measures, tests H1.1–H1.3, and evaluates the registered study guardrails.
 
-> **Evidence warning:** `data/sample/` and `data/raw/test_run.jsonl` are synthetic demonstration data. They validate the pipeline but are not observations about real companies and must not be interpreted as research findings. Replace them only with collected, de-identified study data before making empirical claims.
+> **Data provenance and interpretation:** The repository contains two different kinds of records. `data/sample/cases.csv` holds 12 coded C1/C2/E1 cases; their real-world provenance is not documented in the checked-in file, so these case-level outcomes must not be presented as independently verified field observations. `data/raw/test_run.jsonl` contains **actual measured execution times** from a Python benchmark run, but the benchmark's input workloads are **programmatically generated**, as recorded in its metadata (`seed: 42`, Pareto workload generator). These measurements are real observations of the local analysis program, **not** observed incident-triage latency at a production fintech organization. If external real-world cases were introduced, document their source, collection dates, anonymization, and mapping to these records before making empirical claims.
 
-## Task 3 results & discussion
+## Results and discussion (Tasks 3–4)
 
-The LMS-ready Markdown section is [`reports/paper_section_4.md`](reports/paper_section_4.md).
+The earlier Task 3 draft is [`reports/paper_section_4.md`](reports/paper_section_4.md); its numerical results may refer to an older run and should not be treated as the source of truth for the current benchmark.
 
-### C1 baseline vs E1 proposed method (synthetic sample)
+### C1 baseline vs E1 proposed method (coded case dataset)
 
-The table below is a reproducibility example calculated from the 12 synthetic cases in `data/sample/cases.csv`; each cell is the median (p25–p75). C1 is the legacy baseline and E1 is the guardrailed hybrid method. The paired handoff reduction is unavailable for C1 because the legacy sample has no paired time observations.
+The table below is a historical Task 3 illustration and is **not recalculated from the current `main` case file**. Recompute it before citing it in Task 4. Each cell is the median (p25–p75). C1 is the legacy baseline and E1 is the guardrailed hybrid method. The paired handoff reduction is unavailable for C1 because the legacy sample has no paired time observations.
 
 | Metric | Baseline: C1 (n=4) | Proposed: E1 (n=4) |
 |---|---:|---:|
@@ -29,11 +29,11 @@ The table below is a reproducibility example calculated from the 12 synthetic ca
 | Misrouting rate (%) | 15.83 (14.89–17.00) | 5.78 (5.48–6.17) |
 | Governance index (0–3) | 1.50 (0.75–2.00) | 3.00 (2.75–3.00) |
 
-These illustrative differences are not evidence: the sample is synthetic, has only four cases per group, and cannot support conclusions about the research hypotheses.
+Do not use these historical illustrative values as current findings. The present case dataset contains only four records per group, and the original data provenance has not been verified in this README.
 
-### Local analysis-pipeline profile (synthetic inputs)
+### Updated local analysis-pipeline profile (measured runtime; generated inputs)
 
-The checked-in JSONL profiles one synchronous `analyze()` call over 100 evaluation runs on synthetic workloads. The current example has 98 successful runs and 2 expected invalid-input failures (2% total evaluation error rate; 0% unexpected errors). Successful-run latency is 7.95 ms median (p25–p75: 7.79–8.22 ms), p95 12.69 ms, and p99 15.57 ms. These are local code-profile values, not ITSM service performance; p99 is indicative with this sample size. Environment details and every run are in [`data/raw/test_run.jsonl`](data/raw/test_run.jsonl), and the aggregate table is [`data/processed/metrics_summary.csv`](data/processed/metrics_summary.csv).
+The updated checked-in JSONL records actual execution-time measurements of a synchronous `analyze()` call over 100 evaluation runs on programmatically generated workloads. There were 98 successful runs and 2 expected invalid-input failures (2% evaluation error rate; 0 unexpected errors). For successful runs, the updated overall latency is approximately **12.47 ms median, 19.24 ms p95, and 21.42 ms p99**. The log records Python 3.11.9, Linux, AMD EPYC 7763, a fixed random seed of 42, and 15 warm-up runs excluded from evaluation. These are measurements of research software, not production ITSM service performance; upper percentiles are indicative with this sample size. Environment details and every run are in [`data/raw/test_run.jsonl`](data/raw/test_run.jsonl), and the aggregate table is [`data/processed/metrics_summary.csv`](data/processed/metrics_summary.csv).
 
 ![Latency percentiles versus input size](reports/figures/fig1_latency_vs_load.png)
 
@@ -41,7 +41,7 @@ The checked-in JSONL profiles one synchronous `analyze()` call over 100 evaluati
 
 ![Latency distribution by workload shape](reports/figures/fig2_distribution_boxplot.png)
 
-**Figure 2.** Successful-run latency by synthetic workload shape. Boxes show p25–p75, whiskers 1.5×IQR, and diamonds show the median with a 95% bootstrap confidence interval. Failed runs are retained in the guardrail summary.
+**Figure 2.** Measured successful-run latency by programmatically generated workload shape. Boxes show p25–p75, whiskers 1.5×IQR, and diamonds show the median with a 95% bootstrap confidence interval. Failed runs are retained in the guardrail summary.
 
 Vector exports: [Figure 1 PDF](reports/figures/fig1_latency_vs_load.pdf) · [Figure 2 PDF](reports/figures/fig2_distribution_boxplot.pdf)
 
@@ -107,7 +107,7 @@ docker cp bench:/app/data/. ./data/ && docker cp bench:/app/reports/. ./reports/
 ├── data/
 │   ├── raw/test_run.jsonl
 │   ├── processed/metrics_summary.csv
-│   └── sample/                         # synthetic cases and coder agreement
+│   └── sample/                         # coded cases and coder-agreement fixtures; provenance to verify
 ├── docs/
 │   ├── codebook.md
 │   ├── methodology_card.md
@@ -128,7 +128,7 @@ docker cp bench:/app/data/. ./data/ && docker cp bench:/app/reports/. ./reports/
 
 | ID | Hypothesis | Variable(s) | Method | Status |
 |---|---|---|---|---|
-| B1 | H1.1 | DV1 HITL score, ML vs legacy | Mann–Whitney U (one-sided) | Pipeline ready; real data required |
+| B1 | H1.1 | DV1 HITL score, ML vs legacy | Mann–Whitney U (one-sided) | Pipeline ready; independent source validation required |
 | B2 | H1.2 (primary) | DV2 handoff-time reduction | Wilcoxon signed-rank (paired) | Pipeline ready; real data required |
 | B3 | H1.2 (secondary) | DV3 misrouting rate | Mann–Whitney U (one-sided) | Pipeline ready; real data required |
 | B4 | H1.3 | IV2 autonomy vs DV4 governance | Spearman rho (one-sided) | Pipeline ready; real data required |
