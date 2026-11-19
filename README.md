@@ -12,24 +12,28 @@ How are AI-enabled incident triage mechanisms integrated into ITSM workflows (RQ
 
 This mixed-methods (qualitative-driven) study codes public engineering disclosures, post-mortems, and regulatory documents using the Document Analysis Protocol in [`docs/codebook.md`](docs/codebook.md). The research pipeline computes HITL, handoff-time, misrouting, and governance measures, tests H1.1–H1.3, and evaluates the registered study guardrails.
 
-> **Data provenance and interpretation:** The repository contains two different kinds of records. `data/sample/cases.csv` holds 12 coded C1/C2/E1 cases; their real-world provenance is not documented in the checked-in file, so these case-level outcomes must not be presented as independently verified field observations. `data/raw/test_run.jsonl` contains **actual measured execution times** from a Python benchmark run, but the benchmark's input workloads are **programmatically generated**, as recorded in its metadata (`seed: 42`, Pareto workload generator). These measurements are real observations of the local analysis program, **not** observed incident-triage latency at a production fintech organization. If external real-world cases were introduced, document their source, collection dates, anonymization, and mapping to these records before making empirical claims.
+> **Data provenance and interpretation:** The **12 coded C1/C2/E1 cases** in `data/sample/cases.csv` were assembled from **publicly available real-world incident reports, engineering publications, and research case studies**, mapped in [`docs/data_sources.md`](docs/data_sources.md). They are **secondary-source case codings**, not 12 raw incident tickets collected directly from organizations. Several values are analyst-assigned proxies, normalized counts, or illustrative before/after times; these MUST NOT be represented as exact measured company-level figures unless verified in the cited source. The separate `data/raw/test_run.jsonl` contains **real observed execution-time measurements** of the Python analysis pipeline using **generated benchmark workloads**, not production ITSM latency.
 
 ## Results and discussion (Tasks 3–4)
 
 The earlier Task 3 draft is [`reports/paper_section_4.md`](reports/paper_section_4.md); its numerical results may refer to an older run and should not be treated as the source of truth for the current benchmark.
 
-### C1 baseline vs E1 proposed method (coded case dataset)
+### C1 baseline vs E1 proposed method (real-world-source-based case codings)
 
-The table below is a historical Task 3 illustration and is **not recalculated from the current `main` case file**. Recompute it before citing it in Task 4. Each cell is the median (p25–p75). C1 is the legacy baseline and E1 is the guardrailed hybrid method. The paired handoff reduction is unavailable for C1 because the legacy sample has no paired time observations.
+The `data/sample/cases.csv` file comprises **12 case-level codings sourced from real-world publications** (four C1, four C2, four E1). See the [case-to-source traceability table](docs/data_sources.md) for the organizations, references, and provenance caveats. **Case-level metric numbers are not all directly reported in the cited publications**: in particular, denominators such as `100`, inferred misrouting counts, HITL scores, governance flags, and illustrative time pairs may be coding conventions or proxy values. They should be treated as **source-informed illustrative data**, rather than raw production ticket-level measurements. The results below are descriptive summaries of those coded values, not causal estimates.
 
-| Metric | Baseline: C1 (n=4) | Proposed: E1 (n=4) |
-|---|---:|---:|
-| HITL embedding score (1–5) | 1.50 (1.00–2.00) | 4.00 (4.00–4.25) |
-| Handoff reduction (%) | Not available | 53.59 (51.64–54.81) |
-| Misrouting rate (%) | 15.83 (14.89–17.00) | 5.78 (5.48–6.17) |
-| Governance index (0–3) | 1.50 (0.75–2.00) | 3.00 (2.75–3.00) |
+| Metric (case-level mean) | Legacy C1 (n=4) | Standalone AI C2 (n=4) | Hybrid E1 (n=4) |
+|---|---:|---:|---:|
+| HITL score (1–5) | 1.50 | 2.75 | 4.25 |
+| Handoff reduction (%) | N/A | 18.67 | 55.98 |
+| Misrouting rate (%) | approx. 18.0 | 15.25 | 5.00 |
+| Governance index (0–3) | 1.25 | 1.75 | 3.00 |
 
-Do not use these historical illustrative values as current findings. The present case dataset contains only four records per group, and the original data provenance has not been verified in this README.
+The handoff reduction shown here is the **mean of four case-level percentage reductions in each AI group**, not necessarily the percentage reduction between the group-mean times. The C1 cases have no paired time data. These three groups combine heterogeneous organizations and publications; they are not a matched controlled experiment. Do not interpret descriptive differences or the corresponding p-values as causal proof that one routing strategy outperforms another.
+
+**Coder agreement:** `data/sample/coder_agreement.csv` contains 12 paired coder labels (10 exact matches; 83.33% raw agreement). Weighted kappa can be computed from these labels; this alone does not establish that two independent human annotators performed the coding. The documentation must state who assigned each label and how disagreements were adjudicated before claiming independent inter-rater validation.
+
+**Guardrails:** Recompute G1–G4 from the current case file. In particular, do not reuse the historical v1.0 claim that all four pass: on the updated case labels the independent-evidence G3 result was 25%, below its 30% threshold. This guardrail describes the coding dataset, not independently confirmed field evidence.
 
 ### Updated local analysis-pipeline profile (measured runtime; generated inputs)
 
@@ -107,9 +111,10 @@ docker cp bench:/app/data/. ./data/ && docker cp bench:/app/reports/. ./reports/
 ├── data/
 │   ├── raw/test_run.jsonl
 │   ├── processed/metrics_summary.csv
-│   └── sample/                         # coded cases and coder-agreement fixtures; provenance to verify
+│   └── sample/                         # 12 source-informed coded cases and coder-agreement labels
 ├── docs/
 │   ├── codebook.md
+│   ├── data_sources.md                 # case-to-source traceability and metric caveats
 │   ├── methodology_card.md
 │   └── domain_model.md                 # ML/AI track: loss, metrics, notation (LaTeX)
 ├── notebooks/01_data_analysis.ipynb
@@ -128,7 +133,7 @@ docker cp bench:/app/data/. ./data/ && docker cp bench:/app/reports/. ./reports/
 
 | ID | Hypothesis | Variable(s) | Method | Status |
 |---|---|---|---|---|
-| B1 | H1.1 | DV1 HITL score, ML vs legacy | Mann–Whitney U (one-sided) | Pipeline ready; independent source validation required |
+| B1 | H1.1 | DV1 HITL score, ML vs legacy | Mann–Whitney U (one-sided) | Source-informed case analysis; source-level metric validation required |
 | B2 | H1.2 (primary) | DV2 handoff-time reduction | Wilcoxon signed-rank (paired) | Pipeline ready; real data required |
 | B3 | H1.2 (secondary) | DV3 misrouting rate | Mann–Whitney U (one-sided) | Pipeline ready; real data required |
 | B4 | H1.3 | IV2 autonomy vs DV4 governance | Spearman rho (one-sided) | Pipeline ready; real data required |
